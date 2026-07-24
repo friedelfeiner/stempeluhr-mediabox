@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Stempeluhr-Dashboard</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: #1c1712;
+    color: #eef2ea;
+    min-height: 100vh;
+  }
+  #app {
+    max-width: 460px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  #app.not-found {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
