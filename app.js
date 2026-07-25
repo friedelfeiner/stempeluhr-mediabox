@@ -403,8 +403,19 @@ function shiftBadge(type) {
   return { bg: COLORS.halbBg, fg: '#eef2ea' };
 }
 
+// Nur Besuche ab dem ersten bezahlten Guthaben-Kauf zeigen (gleicher
+// Cutover wie die Guthaben-Berechnung in get_dashboard) — aeltere Besuche
+// liefen ueber das alte Abrechnungsmodell und gehoeren nicht "zur Rechnung".
+// Kunden ohne Guthaben-Feature (keine bezahlten Kaeufe) sehen weiterhin alles.
+function verlaufVisits(data) {
+  const paid = (data.purchases || []).filter((p) => p.status === 'bezahlt');
+  if (!paid.length) return data.visits;
+  const cutover = paid.reduce((min, p) => (p.purchased_at < min ? p.purchased_at : min), paid[0].purchased_at).slice(0, 10);
+  return data.visits.filter((v) => v.visit_date >= cutover);
+}
+
 function renderVerlauf(data) {
-  const rows = data.visits.map((v) => {
+  const rows = verlaufVisits(data).slice().reverse().map((v) => {
     const d = parseDateOnly(v.visit_date);
     const badge = shiftBadge(v.shift_type);
     return `
