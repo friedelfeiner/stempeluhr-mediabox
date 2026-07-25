@@ -322,7 +322,7 @@ function renderTabs() {
 
 function renderMonat(data) {
   const win = calendarWindow(state.monthOffset);
-  const vByDate = visitsByDate(data.visits);
+  const vByDate = visitsByDate(billedVisits(data));
   const pByDate = purchaseMarkersByDate(data.purchases);
   const todayKey = dateKey(win.today);
 
@@ -406,7 +406,8 @@ function shiftBadge(type) {
 // Cutover wie die Guthaben-Berechnung in get_dashboard) — aeltere Besuche
 // liefen ueber das alte Abrechnungsmodell und gehoeren nicht "zur Rechnung".
 // Kunden ohne Guthaben-Feature (keine bezahlten Kaeufe) sehen weiterhin alles.
-function verlaufVisits(data) {
+// Gilt fuer Kalender UND Verlauf gleichermassen.
+function billedVisits(data) {
   const paid = (data.purchases || []).filter((p) => p.status === 'bezahlt');
   if (!paid.length) return data.visits;
   const cutover = paid.reduce((min, p) => (p.purchased_at < min ? p.purchased_at : min), paid[0].purchased_at).slice(0, 10);
@@ -414,7 +415,7 @@ function verlaufVisits(data) {
 }
 
 function renderVerlauf(data) {
-  const rows = verlaufVisits(data).slice().reverse().map((v) => {
+  const rows = billedVisits(data).slice().reverse().map((v) => {
     const d = parseDateOnly(v.visit_date);
     const badge = shiftBadge(v.shift_type);
     return `
