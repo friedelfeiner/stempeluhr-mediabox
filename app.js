@@ -15,9 +15,9 @@ const PRICES_EUR = { full: 400, sprint: 300, halb: 200 };
 const PACK_SIZES = [5, 10, 15];
 
 const COLORS = {
-  bg: '#1c1712',
-  accentBright: '#6CDD19',
-  accentDark: '#1F771D',
+  bg: '#17161a',
+  accentBright: '#8fe3a0',
+  accentDark: '#2f6b3f',
   accentEmail: '#8b5cf6',
   red: '#ff3b30',
   orange: '#d99a2b',
@@ -25,7 +25,7 @@ const COLORS = {
 };
 
 const CONTACT = {
-  whatsapp: '4917951365658', // +49 179 5135658, ohne '+'/Leerzeichen
+  whatsapp: '491795135658', // +49 179 5135658, ohne '+'/Leerzeichen
   email: 'zahlung@floachleitner.com',
 };
 
@@ -551,7 +551,7 @@ function render() {
   const data = state.data;
   root.className = '';
   root.innerHTML = `
-    <div style="flex:1;overflow:auto;padding:64px 20px 0">
+    <div style="flex:1;overflow:auto;padding:max(20px, env(safe-area-inset-top)) 20px 0">
       ${renderHeader(data)}
       ${data.customer.shifts_enabled ? renderRing(data, computeBalanceInfo(data)) : ''}
       ${renderTabs()}
