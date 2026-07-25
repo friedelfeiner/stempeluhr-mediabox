@@ -214,14 +214,18 @@ function visitsByDate(visits) {
   return map;
 }
 
+// Rechnungsdatum (purchased_at) und Zahlungsdatum (paid_at) sind zwei getrennte
+// Tage - eine bezahlte Rechnung zeigt also 🧾 am Rechnungs- und ✓ am Zahlungstag,
+// nicht nur eins von beiden (Flo, 2026-07-25).
 function purchaseMarkersByDate(purchases) {
   const map = new Map();
-  for (const p of purchases) {
-    const key = dateKey(new Date(p.purchased_at));
+  const mark = (key, field) => {
     if (!map.has(key)) map.set(key, { invoice: false, payment: false });
-    const m = map.get(key);
-    if (p.status === 'offen') m.invoice = true;
-    if (p.status === 'bezahlt') m.payment = true;
+    map.get(key)[field] = true;
+  };
+  for (const p of purchases) {
+    mark(dateKey(new Date(p.purchased_at)), 'invoice');
+    if (p.status === 'bezahlt' && p.paid_at) mark(dateKey(new Date(p.paid_at)), 'payment');
   }
   return map;
 }
