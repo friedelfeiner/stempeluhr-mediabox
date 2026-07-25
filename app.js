@@ -15,7 +15,7 @@ const PRICES_EUR = { full: 400, sprint: 300, halb: 200 };
 const PACK_SIZES = [5, 10, 15];
 
 const COLORS = {
-  bg: '#17161a',
+  bg: '#1c1712',
   accentBright: '#8fe3a0',
   accentDark: '#2f6b3f',
   accentEmail: '#8b5cf6',
@@ -232,13 +232,12 @@ function purchaseMarkersByDate(purchases) {
 
 function renderHeader(data) {
   return `
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;margin-bottom:8px">
-      <img src="assets/floachleitner-logo.png" alt="floachleitner.com" style="height:9px;width:auto;opacity:.6;filter:brightness(0) invert(1);justify-self:start">
-      <div style="justify-self:center;display:flex;flex-direction:column;align-items:center">
+    <div style="position:relative;margin-bottom:8px">
+      <img src="assets/floachleitner-logo.png" alt="floachleitner.com" style="position:absolute;top:0;left:0;height:9px;width:auto;opacity:.6;filter:brightness(0) invert(1)">
+      <div style="display:flex;flex-direction:column;align-items:center;padding-top:16px">
         <img src="assets/logo-${slug(data.customer.name)}.svg" data-png-src="assets/logo-${slug(data.customer.name)}.png" data-stage="svg" alt="${esc(data.customer.name)}" style="max-height:34px;max-width:140px;width:auto;height:auto;filter:${(LOGO_INVERT_OVERRIDE[slug(data.customer.name)] ?? true) ? 'invert(1)' : 'none'}" onerror="window.__logoFallback(this)">
         <span style="display:none;font-size:15px;font-weight:700">${esc(data.customer.name)}</span>
       </div>
-      <span></span>
     </div>
     ${!data.customer.shifts_enabled ? `<div style="text-align:center;font-size:9.5px;color:rgba(238,242,234,.4);margin-bottom:18px">Stand: ${esc(fmtStandVienna(data.last_sync))}</div>` : ''}
   `;
