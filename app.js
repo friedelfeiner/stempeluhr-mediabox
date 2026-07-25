@@ -562,7 +562,7 @@ function render() {
   const data = state.data;
   root.className = '';
   root.innerHTML = `
-    <div style="flex:1;overflow:auto;padding:max(20px, env(safe-area-inset-top)) 20px 0">
+    <div style="padding:max(20px, env(safe-area-inset-top)) 20px 0">
       ${renderHeader(data)}
       ${data.customer.shifts_enabled ? renderRing(data, computeBalanceInfo(data)) : ''}
       ${renderTabs()}
@@ -572,7 +572,7 @@ function render() {
       <div style="height:20px"></div>
     </div>
     ${data.customer.shifts_enabled ? `
-      <div style="flex:none;padding:12px 20px 30px;border-top:1px solid rgba(255,255,255,.1);background:${COLORS.bg}">
+      <div style="position:sticky;bottom:0;padding:12px 20px max(12px, env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.1);background:${COLORS.bg}">
         <div data-action="open-modal" style="text-align:center;padding:13px 0;border-radius:10px;font-size:14.5px;font-weight:700;background:${COLORS.accentBright};color:#10160d;cursor:pointer">Neue Rechnung anfordern</div>
       </div>
     ` : ''}
