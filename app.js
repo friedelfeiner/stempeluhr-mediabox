@@ -438,17 +438,61 @@ function billedVisits(data) {
   return data.visits.filter((v) => v.visit_date >= cutover);
 }
 
+function visitEventRow(v) {
+  const d = parseDateOnly(v.visit_date);
+  const badge = shiftBadge(v.shift_type);
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:13.5px">
+      <span style="flex:1;white-space:nowrap;font-size:12.5px">${WEEKDAY_SHORT[(d.getDay() + 6) % 7]} ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}. · ${fmtTimeVienna(v.started_at)}–${fmtTimeVienna(v.ended_at)}</span>
+      <span style="flex:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;background:${badge.bg};color:${badge.fg}">${SHIFT_LABELS[v.shift_type] || SHIFT_LABELS.full}</span>
+    </div>
+  `;
+}
+
+function invoiceEventRow(p) {
+  const d = parseDateOnly(p.purchased_at.slice(0, 10));
+  const ref = p.invoice_ref ? ` ${esc(p.invoice_ref)}` : '';
+  const amount = p.amount_eur != null ? fmtEuro(p.amount_eur) : `${p.quantity} ${pluralize(p.quantity, 'Tag', 'Tage')}`;
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin:2px 0;border-radius:8px;background:rgba(217,154,43,.14);font-size:13.5px">
+      <span style="flex:1;white-space:nowrap;font-size:12.5px;color:${COLORS.orange};font-weight:600">🧾 ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}. · Rechnung${ref} gestellt</span>
+      <span style="flex:none;font-size:11.5px;font-weight:600;color:${COLORS.orange}">${amount}</span>
+    </div>
+  `;
+}
+
+function paymentEventRow(p) {
+  const d = parseDateOnly(p.paid_at.slice(0, 10));
+  const ref = p.invoice_ref ? ` ${esc(p.invoice_ref)}` : '';
+  const amount = p.amount_eur != null ? fmtEuro(p.amount_eur) : `${p.quantity} ${pluralize(p.quantity, 'Tag', 'Tage')}`;
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin:2px 0;border-radius:8px;background:rgba(143,227,160,.14);font-size:13.5px">
+      <span style="flex:1;white-space:nowrap;font-size:12.5px;color:${COLORS.accentBright};font-weight:600">✓ ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}. · Zahlung${ref} erhalten</span>
+      <span style="flex:none;font-size:11.5px;font-weight:600;color:${COLORS.accentBright}">${amount}</span>
+    </div>
+  `;
+}
+
+// Verlauf mischt drei Ereignistypen (Besuch, Rechnung gestellt, Zahlung
+// erhalten) chronologisch in eine Liste, statt Rechnung/Zahlung nur im
+// Kalender als Icon zu zeigen (Flo, 2026-07-26). Jedes Ereignis bekommt
+// einen sortierbaren Datumsschlüssel; bei Gleichstand am selben Tag steht
+// die Rechnung vor der Zahlung, beide vor dem Besuch (Lesefluss von oben:
+// neuestes zuerst).
 function renderVerlauf(data) {
-  const rows = billedVisits(data).slice().reverse().map((v) => {
-    const d = parseDateOnly(v.visit_date);
-    const badge = shiftBadge(v.shift_type);
-    return `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:13.5px">
-        <span style="flex:1;white-space:nowrap;font-size:12.5px">${WEEKDAY_SHORT[(d.getDay() + 6) % 7]} ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}. · ${fmtTimeVienna(v.started_at)}–${fmtTimeVienna(v.ended_at)}</span>
-        <span style="flex:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;background:${badge.bg};color:${badge.fg}">${SHIFT_LABELS[v.shift_type] || SHIFT_LABELS.full}</span>
-      </div>
-    `;
-  }).join('');
+  const events = [];
+  for (const v of billedVisits(data)) {
+    events.push({ key: `${v.visit_date}-3`, html: visitEventRow(v) });
+  }
+  for (const p of data.purchases || []) {
+    events.push({ key: `${p.purchased_at.slice(0, 10)}-1`, html: invoiceEventRow(p) });
+    if (p.status === 'bezahlt' && p.paid_at) {
+      events.push({ key: `${p.paid_at.slice(0, 10)}-2`, html: paymentEventRow(p) });
+    }
+  }
+  events.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+
+  const rows = events.map((e) => e.html).join('');
   return `
     <div style="font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:rgba(238,242,234,.4);margin:0 0 8px">Verlauf</div>
     ${rows || '<div style="font-size:12.5px;color:rgba(238,242,234,.4);padding:8px 0">Noch keine Besuche erfasst.</div>'}
