@@ -63,6 +63,26 @@ function pluralize(n, singular, plural) {
 // brauchen diesen Filter nicht — hier per Slug abschaltbar.
 const LOGO_INVERT_OVERRIDE = { mediabox: false };
 
+// Kürzel pro Kunde für den Homescreen-Titel ("Flo bei GF" statt vollem
+// Kundennamen — Platz unterm Apple-Touch-Icon ist auf ca. 10-11 Zeichen/Zeile
+// ausgelegt). Ohne Eintrag hier fällt der Titel auf "Flo bei <Kundenname>" zurück.
+const HOMESCREEN_LABEL = { gruenfilm: 'GF', mediabox: 'MB' };
+
+// Setzt Browser-Tab-Titel + den Text, den iOS unters Homescreen-Icon
+// schreibt (rel="apple-touch-icon" liegt bereits statisch im <head>, s. index.html).
+function setHomescreenTitle(customerName) {
+  const label = HOMESCREEN_LABEL[slug(customerName)] ?? customerName;
+  const title = `Flo bei ${label}`;
+  document.title = title;
+  let meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'apple-mobile-web-app-title';
+    document.head.appendChild(meta);
+  }
+  meta.content = title;
+}
+
 // Versucht zuerst .svg, dann .png, fällt danach auf den Kundennamen als
 // Text zurück (falls für den Kunden keine Logo-Datei hinterlegt ist).
 window.__logoFallback = function (img) {
@@ -564,6 +584,7 @@ function renderModal() {
 
 function render() {
   const data = state.data;
+  setHomescreenTitle(data.customer.name);
   root.className = '';
   root.innerHTML = `
     <div style="padding:max(20px, env(safe-area-inset-top)) 20px 0">
