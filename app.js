@@ -313,9 +313,13 @@ function renderRing(data, info) {
           <span style="width:12px;height:12px;border-radius:50%;background:${COLORS.red};flex:none"></span>
           <span style="font-size:12px;color:rgba(238,242,234,.6)">100%</span>
         </div>
-        <span style="font-size:9.5px;color:rgba(238,242,234,.4);margin-top:2px">Stand: ${esc(fmtStandVienna(data.last_sync))}</span>
       </div>
     </div>
+    <!-- "Stand" bewusst AUSSERHALB des Legenden-Blocks: der Block ist rechts verankert
+         und wuerde sonst so breit wie dieser Text (~124px statt ~54px), was die
+         Legende nach links in den Ring schiebt - bei 393px um 11px Ueberlappung
+         (gemessen 2026-08-18). Hier haengt die Breite an nichts mehr. -->
+    <div style="text-align:right;font-size:9.5px;color:rgba(238,242,234,.4);margin:2px 0 8px">Stand: ${esc(fmtStandVienna(data.last_sync))}</div>
     <div style="text-align:center;margin-bottom:10px">
       <div style="font-size:14px;font-weight:700">${remainingLabel}</div>
       <div style="font-size:12px;color:rgba(238,242,234,.55)">${sprintLabel}</div>
@@ -603,8 +607,15 @@ function renderModal() {
   const mailTag = packChosen ? `<a href="${mailLink(state.selectedPack)}" style="${mailStyle};display:block;text-decoration:none">E-Mail</a>` : `<div style="${mailStyle}">E-Mail</div>`;
 
   return `
-    <div data-action="close-modal" style="position:absolute;inset:0;background:rgba(10,8,6,.55);backdrop-filter:blur(2px);display:flex;align-items:flex-end;z-index:10">
-      <div data-action="stop" style="width:100%;background:${COLORS.bg};border-top-left-radius:20px;border-top-right-radius:20px;padding:20px 20px 30px;box-shadow:0 -10px 30px rgba(0,0,0,.3)">
+    <!-- position:FIXED, nicht absolute: #app ist so hoch wie die ganze Seite, ein
+         absolut positioniertes Overlay hing daher am Seitenende statt am unteren
+         Bildschirmrand. Das Sheet war dadurch nur sichtbar, wenn man ganz nach unten
+         gescrollt hatte - oben fehlten 163px (gemessen 2026-08-18).
+         justify-content + max-width halten es in der 460px-Spalte wie bisher;
+         max-height/overflow fangen den Fall ab, dass es mal hoeher als der
+         Bildschirm waere (kleines Geraet quer). -->
+    <div data-action="close-modal" style="position:fixed;inset:0;background:rgba(10,8,6,.55);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:10">
+      <div data-action="stop" style="width:100%;max-width:460px;max-height:92dvh;overflow-y:auto;background:${COLORS.bg};border-top-left-radius:20px;border-top-right-radius:20px;padding:20px 20px 30px;box-shadow:0 -10px 30px rgba(0,0,0,.3)">
         <div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 16px"></div>
         <div style="font-size:15px;font-weight:700;margin-bottom:2px">Neue Rechnung anfordern</div>
         <div style="font-size:12px;color:rgba(238,242,234,.45);margin-bottom:14px">Wie viele ganze Tage möchtest du kaufen?</div>
