@@ -524,10 +524,10 @@ function paymentEventRow(p) {
 
 // Verlauf mischt drei Ereignistypen (Besuch, Rechnung gestellt, Zahlung
 // erhalten) chronologisch in eine Liste, statt Rechnung/Zahlung nur im
-// Kalender als Icon zu zeigen (Flo, 2026-07-26). Sortiert aufsteigend —
-// aeltestes zuerst, die erste Rechnung steht also ganz oben (Flo,
-// 2026-07-26). Bei mehreren Ereignissen am selben Tag kommt die Rechnung
-// vor der Zahlung und beide vor dem Besuch; dafuer sorgt das Prio-Suffix
+// Kalender als Icon zu zeigen (Flo, 2026-07-26). Sortiert absteigend —
+// neuestes zuerst, der letzte Arbeitstag steht also ganz oben (Flo,
+// 2026-08-21). Bei mehreren Ereignissen am selben Tag kommt der Besuch
+// vor der Zahlung und beide vor der Rechnung; dafuer sorgt das Prio-Suffix
 // am Datumsschluessel.
 function renderVerlauf(data) {
   const events = [];
@@ -540,7 +540,7 @@ function renderVerlauf(data) {
       events.push({ key: `${p.paid_at.slice(0, 10)}-2`, html: paymentEventRow(p) });
     }
   }
-  events.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  events.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
 
   const rows = events.map((e) => e.html).join('');
   return `
