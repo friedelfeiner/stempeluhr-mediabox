@@ -152,16 +152,33 @@ function mondayOnOrBefore(date) {
 
 const SHIFT_LABELS = { full: 'Ganzer Tag', sprint: 'Sprinttag', halb: 'Halber Tag' };
 
+// Der Warnhinweis unter dem Ring sitzt in einer getoenten Pille statt als
+// nackte farbige Zeile: sichtbar, ohne zu schreien (Flo, 2026-08-21). Die
+// Schriftfarbe ist bewusst eine aufgehellte Variante des Punkt-Tons - der
+// volle Ton hat auf dem getoenten Grund zu wenig Kontrast.
+const WARN_STYLES = {
+  knapp: {
+    dot: COLORS.orange, text: '#e8b455',
+    bg: 'rgba(217,154,43,.16)', border: 'rgba(217,154,43,.35)',
+    label: 'Guthaben wird knapp',
+  },
+  aufgebraucht: {
+    dot: COLORS.red, text: '#ff8078',
+    bg: 'rgba(255,59,48,.16)', border: 'rgba(255,59,48,.4)',
+    label: 'Guthaben aufgebraucht',
+  },
+};
+
 function markerStyle(type) {
-  if (type === 'full') return `width:19px;height:19px;border-radius:50%;background:${COLORS.accentDark}`;
-  if (type === 'sprint') return `width:19px;height:19px;border-radius:50%;background:${COLORS.accentBright}`;
-  return `width:19px;height:19px;border-radius:50%;background:${COLORS.accentBright};clip-path:inset(0 0 0 50%)`;
+  if (type === 'full') return `width:14px;height:14px;border-radius:50%;background:${COLORS.accentDark}`;
+  if (type === 'sprint') return `width:14px;height:14px;border-radius:50%;background:${COLORS.accentBright}`;
+  return `width:14px;height:14px;border-radius:50%;background:${COLORS.accentBright};clip-path:inset(0 0 0 50%)`;
 }
 
 function legendMarkerStyle(type) {
-  if (type === 'full') return `width:11px;height:11px;border-radius:50%;background:${COLORS.accentDark}`;
-  if (type === 'sprint') return `width:11px;height:11px;border-radius:50%;background:${COLORS.accentBright}`;
-  return `width:11px;height:11px;border-radius:50%;background:${COLORS.accentBright};clip-path:inset(0 0 0 50%)`;
+  if (type === 'full') return `width:9px;height:9px;border-radius:50%;background:${COLORS.accentDark}`;
+  if (type === 'sprint') return `width:9px;height:9px;border-radius:50%;background:${COLORS.accentBright}`;
+  return `width:9px;height:9px;border-radius:50%;background:${COLORS.accentBright};clip-path:inset(0 0 0 50%)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +188,7 @@ function legendMarkerStyle(type) {
 const state = {
   tab: 'monat',
   monthOffset: 0,
+  legendOpen: false,
   modalOpen: false,
   selectedPack: null,
   data: null,
@@ -329,47 +347,56 @@ function renderRing(data, info) {
     ? `≈ ${fmtNumber(sprintEquiv)} ${sprintWord} übrig`
     : `≈ ${fmtNumber(Math.abs(sprintEquiv))} ${sprintWord} überzogen`;
 
-  const hint = info.pct >= 0.8
-    ? `<div style="text-align:center;font-size:11.5px;font-weight:600;color:${info.pct >= 1 ? COLORS.red : COLORS.orange};margin:0 0 14px">${info.pct >= 1 ? 'Guthaben aufgebraucht' : 'Guthaben wird knapp'}</div>`
-    : '';
+  const warn = info.pct >= 1 ? WARN_STYLES.aufgebraucht : info.pct >= 0.8 ? WARN_STYLES.knapp : null;
+  const hint = warn ? `
+        <div style="display:inline-flex;align-items:center;gap:7px;margin-top:6px;padding:6px 13px;border-radius:20px;background:${warn.bg};border:1px solid ${warn.border}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${warn.dot}"></span>
+          <span style="font-size:12px;font-weight:600;color:${warn.text}">${warn.label}</span>
+        </div>` : '';
 
   return `
-    <div style="position:relative;margin:14px 0 2px">
-      <div style="width:128px;margin:0 auto;position:relative">
-        <svg width="128" height="128" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="12"></circle>
-          <circle cx="60" cy="60" r="50" fill="none" stroke="${info.ringColor}" stroke-width="12" stroke-dasharray="${dash} ${circumference}" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
+    <div style="position:relative;margin:22px 0 0">
+      <div style="width:184px;margin:0 auto;position:relative">
+        <svg width="184" height="184" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="10"></circle>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="${info.ringColor}" stroke-width="10" stroke-dasharray="${dash} ${circumference}" stroke-linecap="round" transform="rotate(-90 60 60)"></circle>
         </svg>
         <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <div style="font-size:24px;font-weight:700">${fmtNumber(info.consumed)}/${fmtNumber(info.total)}</div>
-          <div style="font-size:11px;color:rgba(238,242,234,.45)">verbraucht</div>
+          <div style="font-size:34px;font-weight:700;letter-spacing:-.01em;line-height:1">${fmtNumber(info.consumed)}/${fmtNumber(info.total)}</div>
+          <div style="font-size:11px;color:rgba(238,242,234,.4);margin-top:4px">verbraucht</div>
         </div>
       </div>
-      <div style="position:absolute;top:50%;right:0;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;align-items:center;gap:7px">
-          <span style="width:12px;height:12px;border-radius:50%;background:${COLORS.accentDark};flex:none"></span>
-          <span style="font-size:12px;color:rgba(238,242,234,.6)">&lt; 80%</span>
+      <!-- Die Legende bleibt rechts neben dem Ring, ist aber nur noch halb so
+           laut (Punkte 12 -> 8px, Text 12 -> 9.5px). Das haelt sie schmal genug,
+           dass sie auch neben dem auf 184px gewachsenen Ring nicht anstoesst:
+           bei 353px Inhaltsbreite endet der Ring bei ~269px, die Legende
+           beginnt bei ~308px. -->
+      <div style="position:absolute;top:50%;right:0;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${COLORS.accentDark};flex:none"></span>
+          <span style="font-size:9.5px;color:rgba(238,242,234,.42)">&lt; 80%</span>
         </div>
-        <div style="display:flex;align-items:center;gap:7px">
-          <span style="width:12px;height:12px;border-radius:50%;background:${COLORS.orange};flex:none"></span>
-          <span style="font-size:12px;color:rgba(238,242,234,.6)">≥ 80%</span>
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${COLORS.orange};flex:none"></span>
+          <span style="font-size:9.5px;color:rgba(238,242,234,.42)">≥ 80%</span>
         </div>
-        <div style="display:flex;align-items:center;gap:7px">
-          <span style="width:12px;height:12px;border-radius:50%;background:${COLORS.red};flex:none"></span>
-          <span style="font-size:12px;color:rgba(238,242,234,.6)">100%</span>
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${COLORS.red};flex:none"></span>
+          <span style="font-size:9.5px;color:rgba(238,242,234,.42)">100%</span>
         </div>
       </div>
     </div>
-    <!-- "Stand" bewusst AUSSERHALB des Legenden-Blocks: der Block ist rechts verankert
-         und wuerde sonst so breit wie dieser Text (~124px statt ~54px), was die
-         Legende nach links in den Ring schiebt - bei 393px um 11px Ueberlappung
-         (gemessen 2026-08-18). Hier haengt die Breite an nichts mehr. -->
-    <div style="text-align:right;font-size:9.5px;color:rgba(238,242,234,.4);margin:2px 0 8px">Stand: ${esc(fmtStandVienna(data.last_sync))}</div>
-    <div style="text-align:center;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700">${remainingLabel}</div>
-      <div style="font-size:12px;color:rgba(238,242,234,.55)">${sprintLabel}</div>
+    <!-- Was uebrig ist, ist die eigentliche Antwort auf die Frage des Kunden -
+         deshalb die groesste Zeile der Seite (14 -> 23px), direkt unter dem
+         Ring. "Stand" steht jetzt zentriert darunter statt rechts ueber dem
+         Text; die frueher noetige Ruecksicht auf die Legendenbreite entfaellt
+         damit (Flo, 2026-08-21). -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin:18px 0 0">
+      <div style="font-size:23px;font-weight:700;line-height:1.1;text-align:center">${remainingLabel}</div>
+      <div style="font-size:13px;color:rgba(238,242,234,.5)">${sprintLabel}</div>${hint}
+      <div style="font-size:9.5px;color:rgba(238,242,234,.3);margin-top:8px">Stand: ${esc(fmtStandVienna(data.last_sync))}</div>
     </div>
-    ${hint}
+    <div style="height:1px;background:rgba(255,255,255,.08);margin:20px 0 16px"></div>
   `;
 }
 
@@ -378,13 +405,15 @@ function renderRing(data, info) {
 // ---------------------------------------------------------------------------
 
 function renderTabs() {
-  const base = 'flex:1;text-align:center;padding:8px 0;font-size:14px;cursor:pointer;border-radius:8px';
-  const monatActive = state.tab === 'monat';
-  const verlaufActive = state.tab === 'verlauf';
+  const base = 'flex:1;text-align:center;padding:6px 0;font-size:12.5px;cursor:pointer;border-radius:7px';
+  // Der aktive Tab ist nur noch getoent statt vollflaechig gruen - vollflaechig
+  // zog er mehr Blick auf sich als die Zahlen darueber (Flo, 2026-08-21).
+  const on = `font-weight:600;background:rgba(143,227,160,.16);color:${COLORS.accentBright}`;
+  const off = 'font-weight:500;background:transparent;color:rgba(238,242,234,.45)';
   return `
-    <div style="display:flex;gap:4px;background:rgba(255,255,255,.07);border-radius:10px;padding:3px;margin-bottom:14px">
-      <div data-action="tab-monat" style="${base};font-weight:${monatActive ? 600 : 500};background:${monatActive ? COLORS.accentBright : 'transparent'};color:${monatActive ? '#10160d' : 'rgba(238,242,234,.6)'}">Monat</div>
-      <div data-action="tab-verlauf" style="${base};font-weight:${verlaufActive ? 600 : 500};background:${verlaufActive ? COLORS.accentBright : 'transparent'};color:${verlaufActive ? '#10160d' : 'rgba(238,242,234,.6)'}">Verlauf</div>
+    <div style="display:flex;gap:3px;background:rgba(255,255,255,.05);border-radius:9px;padding:2px;margin-bottom:12px">
+      <div data-action="tab-monat" style="${base};${state.tab === 'monat' ? on : off}">Monat</div>
+      <div data-action="tab-verlauf" style="${base};${state.tab === 'verlauf' ? on : off}">Verlauf</div>
     </div>
   `;
 }
@@ -399,10 +428,16 @@ function renderMonat(data) {
   const pByDate = purchaseMarkersByDate(data.purchases);
   const todayKey = dateKey(win.today);
 
+  // Kompakter als frueher: Zellen 36 -> 30px, Punkte 19 -> 14px, KW-Spalte
+  // 26 -> 20px und nur noch die Zahl (das Wort "KW" davor war eine Zeile
+  // Beiwerk), Abstaende 4 -> 3px. Spart rund 60px Hoehe, damit der groessere
+  // Ring darueber ohne zusaetzliches Scrollen Platz hat (Flo, 2026-08-21).
+  const gridCols = 'display:grid;grid-template-columns:20px repeat(7,1fr);gap:3px;margin-bottom:3px';
+
   const weekdayRow = `
-    <div style="display:grid;grid-template-columns:26px repeat(7,1fr);gap:4px;margin-bottom:4px">
+    <div style="${gridCols}">
       <div></div>
-      ${WEEKDAY_SHORT.map((w) => `<div style="text-align:center;font-size:9px;color:rgba(238,242,234,.4)">${w}</div>`).join('')}
+      ${WEEKDAY_SHORT.map((w) => `<div style="text-align:center;font-size:8.5px;color:rgba(238,242,234,.32)">${w}</div>`).join('')}
     </div>
   `;
 
@@ -418,19 +453,17 @@ function renderMonat(data) {
       const cellBg = isWeekend ? 'rgba(238,242,234,.08)' : 'transparent';
       const todayStyle = isToday ? `box-shadow:inset 0 0 0 1.5px ${COLORS.accentBright}` : '';
       return `
-        <div style="min-height:36px;border:1px solid rgba(255,255,255,.14);border-radius:6px;font-size:9px;color:rgba(238,242,234,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;position:relative;background:${cellBg};opacity:${isCurrentMonth ? 1 : 0.35};${todayStyle}">
-          <span style="position:absolute;top:3px;left:4px">${d.getDate()}</span>
-          ${pm && pm.invoice ? `<span style="position:absolute;top:0px;right:1px;font-size:11px">🧾</span>` : ''}
-          ${pm && pm.payment ? `<span style="position:absolute;bottom:0px;right:2px;font-size:12px;font-weight:700;color:${COLORS.accentBright}">✓</span>` : ''}
+        <div style="min-height:30px;border:1px solid rgba(255,255,255,.09);border-radius:5px;font-size:8.5px;color:rgba(238,242,234,.55);display:flex;align-items:center;justify-content:center;padding:2px;position:relative;background:${cellBg};opacity:${isCurrentMonth ? 1 : 0.35};${todayStyle}">
+          <span style="position:absolute;top:2px;left:3px">${d.getDate()}</span>
+          ${pm && pm.invoice ? `<span style="position:absolute;top:0px;right:1px;font-size:9px">🧾</span>` : ''}
+          ${pm && pm.payment ? `<span style="position:absolute;bottom:0px;right:2px;font-size:10px;font-weight:700;color:${COLORS.accentBright}">✓</span>` : ''}
           ${marker ? `<span style="${marker}"></span>` : ''}
         </div>
       `;
     }).join('');
     return `
-      <div style="display:grid;grid-template-columns:26px repeat(7,1fr);gap:4px;margin-bottom:4px">
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8px;color:rgba(238,242,234,.35);line-height:1.2">
-          <span>KW</span><span>${row.kw}</span>
-        </div>
+      <div style="${gridCols}">
+        <div style="display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(238,242,234,.25)">${row.kw}</div>
         ${cellsHtml}
       </div>
     `;
@@ -438,26 +471,38 @@ function renderMonat(data) {
 
   const rangeLabel = `${pad2(win.rangeStart.getDate())}.${pad2(win.rangeStart.getMonth() + 1)}. – ${pad2(win.rangeEnd.getDate())}.${pad2(win.rangeEnd.getMonth() + 1)}.`;
 
-  return `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 8px">
-      <div data-action="month-prev" style="width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer">←</div>
-      <div style="text-align:center">
-        <div style="font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:rgba(238,242,234,.4)">${MONTH_NAMES[win.refMonth.getMonth()]} ${win.refMonth.getFullYear()}</div>
-        <div style="font-size:10px;color:rgba(238,242,234,.35);margin-top:1px">${rangeLabel}</div>
+  // Die beiden Legendenzeilen sind eingeklappt: sie erklaeren etwas, das man
+  // nach dem ersten Mal weiss, standen aber dauerhaft im Weg (Flo, 2026-08-21).
+  const legend = state.legendOpen ? `
+    <div style="display:flex;flex-direction:column;gap:6px;align-items:center;margin:-8px 0 14px;font-size:9.5px;color:rgba(238,242,234,.45)">
+      <div style="display:flex;justify-content:center;gap:12px">
+        <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('full')}"></span>Ganzer Tag</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('sprint')}"></span>Sprinttag</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('halb')}"></span>Halber Tag</span>
       </div>
-      <div data-action="month-next" style="width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer">→</div>
+      <div style="display:flex;justify-content:center;gap:12px">
+        <span>🧾 Rechnung gestellt</span>
+        <span>✓ Zahlung erhalten</span>
+      </div>
+    </div>
+  ` : '';
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 6px">
+      <div data-action="month-prev" style="width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(238,242,234,.55);cursor:pointer">←</div>
+      <div style="display:flex;align-items:baseline;gap:7px">
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(238,242,234,.42)">${MONTH_NAMES[win.refMonth.getMonth()]} ${win.refMonth.getFullYear()}</div>
+        <div style="font-size:9.5px;color:rgba(238,242,234,.28)">${rangeLabel}</div>
+      </div>
+      <div data-action="month-next" style="width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(238,242,234,.55);cursor:pointer">→</div>
     </div>
     ${weekdayRow}
     ${rowsHtml}
-    <div style="display:flex;justify-content:center;gap:14px;margin:6px 0 18px;font-size:10px;color:rgba(238,242,234,.5)">
-      <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('full')}"></span>Ganzer Tag</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('sprint')}"></span>Sprinttag</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="${legendMarkerStyle('halb')}"></span>Halber Tag</span>
+    <div data-action="toggle-legend" style="display:flex;align-items:center;justify-content:center;gap:5px;margin:8px 0 14px;font-size:9.5px;color:rgba(238,242,234,.35);cursor:pointer;user-select:none">
+      <span>${state.legendOpen ? 'Legende ausblenden' : 'Legende'}</span>
+      <span style="font-size:8px">${state.legendOpen ? '▲' : '▼'}</span>
     </div>
-    <div style="display:flex;justify-content:center;gap:14px;margin:-10px 0 18px;font-size:10px;color:rgba(238,242,234,.5)">
-      <span>🧾 Rechnung gestellt</span>
-      <span>✓ Zahlung erhalten</span>
-    </div>
+    ${legend}
   `;
 }
 
@@ -579,7 +624,7 @@ function renderSummary(data) {
   const total = Object.entries(counts).reduce((sum, [key, n]) => sum + n * PRICES_EUR[key], 0);
 
   return `
-    <div style="font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:rgba(238,242,234,.4);margin:0 0 8px">Seit letzter Zahlung</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(238,242,234,.35);margin:0 0 6px">Seit letzter Zahlung</div>
     ${rows}
     <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:13px;font-weight:700">
       <span>Summe</span><span>${fmtEuro(total)}</span>
@@ -606,7 +651,7 @@ function renderPayments(data) {
     `;
   }).join('');
   return `
-    <div style="font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:rgba(238,242,234,.4);margin:26px 0 8px">Zahlungen</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(238,242,234,.35);margin:26px 0 6px">Zahlungen</div>
     ${rows || '<div style="font-size:12.5px;color:rgba(238,242,234,.4);padding:8px 0">Noch keine Zahlungen erfasst.</div>'}
     <div style="height:20px"></div>
   `;
@@ -718,6 +763,7 @@ root.addEventListener('click', (e) => {
   else if (action === 'tab-verlauf') { state.tab = 'verlauf'; render(); }
   else if (action === 'month-prev') { state.monthOffset -= 1; render(); }
   else if (action === 'month-next') { state.monthOffset += 1; render(); }
+  else if (action === 'toggle-legend') { state.legendOpen = !state.legendOpen; render(); }
   else if (action === 'open-modal') { state.modalOpen = true; render(); }
   else if (action === 'close-modal') { state.modalOpen = false; state.selectedPack = null; render(); }
   else if (action === 'stop') { e.stopPropagation(); }
