@@ -725,22 +725,159 @@ root.addEventListener('click', (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Daten laden
+// ---------------------------------------------------------------------------
+
+let client = null;
+let accessToken = null;
+let lastLoadedAt = 0;
+
+async function loadDashboard() {
+  const { data, error } = await client.rpc('get_dashboard', { token: accessToken });
+  if (error) throw error;
+  if (!data) throw new Error('kein Zugriff');
+  state.data = data;
+  lastLoadedAt = Date.now();
+}
+
+// ---------------------------------------------------------------------------
+// Pull-to-Refresh
+// ---------------------------------------------------------------------------
+//
+// Die Daten wurden bisher genau einmal beim Laden geholt. Auf dem iPhone haelt
+// iOS eine vom Homescreen gestartete Seite aber tage- bis wochenlang im
+// Speicher - und im Standalone-Modus gibt es weder Adresszeile noch
+// Reload-Knopf. Der Kunde sah also potenziell einen uralten Stand, ohne eine
+// Moeglichkeit, das zu merken oder zu beheben (Flo, 2026-08-19).
+//
+// Zwei Wege dagegen: das klassische Ziehen von oben, und ein stiller Abgleich,
+// sobald die App wieder in den Vordergrund kommt. Der zweite deckt den
+// Normalfall ab, ohne dass jemand etwas tun muss.
+
+const PULL_THRESHOLD = 70;   // ab hier loest Loslassen ein Neuladen aus
+const PULL_MAX = 110;        // weiter laesst sich nicht ziehen
+const PULL_RESISTANCE = 0.5; // Finger bewegt sich doppelt so weit wie der Inhalt
+const STALE_AFTER_MS = 60_000;
+
+const ptr = document.getElementById('ptr');
+const ptrToast = document.getElementById('ptr-toast');
+
+let pullStartY = 0;
+let pullDistance = 0;
+let pulling = false;
+let refreshing = false;
+let toastTimer = null;
+
+// Die Transition steht bewusst inline und nicht als Klasse: render() setzt
+// root.className zurueck und wuerde eine Klasse mitten im Neuladen wegwerfen.
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function setPullOffset(distance, animate) {
+  pullDistance = distance;
+  const shown = Math.min(distance, PULL_MAX);
+  const transition = animate && !reducedMotion.matches
+    ? 'transform .25s ease, opacity .25s ease'
+    : '';
+  ptr.style.transition = transition;
+  root.style.transition = transition;
+  ptr.style.transform = `translateY(${shown - 52}px)`;
+  ptr.style.opacity = String(Math.min(1, distance / PULL_THRESHOLD));
+  // Der Ring dreht sich beim Ziehen mit, damit klar ist, dass die Geste zieht
+  // und nicht nur die Seite verschiebt.
+  ptr.firstElementChild.style.transform = refreshing ? '' : `rotate(${distance * 2.6}deg)`;
+  root.style.transform = shown > 0 ? `translateY(${shown}px)` : '';
+}
+
+function showToast(message) {
+  ptrToast.textContent = message;
+  ptrToast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ptrToast.classList.remove('show'), 2600);
+}
+
+async function refresh({ silent = false } = {}) {
+  if (refreshing) return;
+  refreshing = true;
+  if (!silent) {
+    ptr.classList.add('loading');
+    setPullOffset(PULL_THRESHOLD, true);
+  }
+  try {
+    await loadDashboard();
+    render();
+  } catch {
+    // Alten Stand stehen lassen - ein leeres Dashboard waere schlechter als
+    // ein veraltetes. Nur bei sichtbarer Geste auch sichtbar quittieren.
+    if (!silent) showToast('Keine Verbindung');
+  } finally {
+    refreshing = false;
+    if (!silent) {
+      ptr.classList.remove('loading');
+      setPullOffset(0, true);
+    }
+  }
+}
+
+function initPullToRefresh() {
+  document.addEventListener('touchstart', (e) => {
+    if (state.modalOpen || refreshing || e.touches.length !== 1) return;
+    if (window.scrollY > 0) return;
+    pullStartY = e.touches[0].clientY;
+    pulling = true;
+  }, { passive: true });
+
+  // Nicht passiv: nur so laesst sich das Gummiband-Scrollen von iOS
+  // unterdruecken, waehrend wirklich gezogen wird.
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - pullStartY;
+    if (dy <= 0 || window.scrollY > 0) {
+      pulling = false;
+      if (pullDistance > 0) setPullOffset(0, true);
+      return;
+    }
+    e.preventDefault();
+    setPullOffset(dy * PULL_RESISTANCE, false);
+  }, { passive: false });
+
+  const end = () => {
+    if (!pulling) return;
+    pulling = false;
+    if (pullDistance >= PULL_THRESHOLD) refresh();
+    else setPullOffset(0, true);
+  };
+  document.addEventListener('touchend', end, { passive: true });
+  document.addEventListener('touchcancel', end, { passive: true });
+
+  // Rueckkehr in den Vordergrund: still nachladen, aber nur wenn der Stand
+  // wirklich alt ist - kurzes Wegtippen soll keine Anfrage ausloesen.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastLoadedAt < STALE_AFTER_MS) return;
+    refresh({ silent: true });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 
 async function main() {
-  const token = new URLSearchParams(window.location.search).get('t');
-  if (!token) { renderNotFound(); return; }
+  accessToken = new URLSearchParams(window.location.search).get('t');
+  if (!accessToken) { renderNotFound(); return; }
 
   renderLoading();
+  client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-  const client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-  const { data, error } = await client.rpc('get_dashboard', { token });
+  try {
+    await loadDashboard();
+  } catch {
+    renderNotFound();
+    return;
+  }
 
-  if (error || !data) { renderNotFound(); return; }
-
-  state.data = data;
   render();
+  initPullToRefresh();
 }
 
 main();

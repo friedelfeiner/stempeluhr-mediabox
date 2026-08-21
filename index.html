@@ -39,10 +39,68 @@
     text-align: center;
     padding: 40px 20px;
   }
+
+  /* Pull-to-Refresh: Indikator haengt ueber dem oberen Rand und wird beim
+     Ziehen hereingeschoben. Liegt bewusst ausserhalb von #app, damit ihn
+     das Neuzeichnen (root.innerHTML = ...) nicht wegwirft. */
+  #ptr {
+    position: fixed;
+    top: max(0px, env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-52px);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 40;
+  }
+  #ptr-spinner {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(238, 242, 234, .2);
+    border-top-color: #8fe3a0;
+  }
+  /* Waehrend des Ladens dreht der Ring dauerhaft; beim Ziehen wird er
+     stattdessen per inline-transform mitgedreht. */
+  #ptr.loading #ptr-spinner { animation: ptr-spin .7s linear infinite; }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+  /* Die Uebergangs-Animation beim Loslassen setzt app.js inline - render()
+     leert root.className und wuerde eine Klasse hier wegwerfen. */
+
+  #ptr-toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 8px);
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(8px);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 60;
+  }
+  #ptr-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    #ptr-toast { transition: none; }
+    #ptr.loading #ptr-spinner { animation-duration: 1.4s; }
+  }
 </style>
 </head>
 <body>
+<div id="ptr"><div id="ptr-spinner"></div></div>
 <div id="app"></div>
+<div id="ptr-toast"></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>
