@@ -196,12 +196,57 @@ function renderLoading() {
 // Berechnungen
 // ---------------------------------------------------------------------------
 
+// Der Ring zeigt nur die LAUFENDE Abrechnungsperiode, nicht alle Rechnungen
+// zusammengezaehlt. Eine Rechnung faellt aus der Ringrechnung raus, sobald eine
+// neuere bezahlte Rechnung existiert - denn die neuere enthaelt die
+// Nachberechnung, die alles Offene aus der alten glattzieht (Flo, 2026-08-19).
+//
+// Ohne das waechst der Nenner mit jeder Rechnung mit: nach zwanzig Rechnungen
+// stuende dort "115 von 120", also dauerhaft rot, obwohl gerade erst neu
+// gekauft wurde.
+//
+// Das Kontingent der laufenden Periode ergibt sich dabei von selbst, ohne dass
+// der Nachberechnungs-Anteil irgendwo gepflegt werden muesste:
+//
+//   Kontingent = Rechnungsmenge - Ueberziehung der Vorperiode
+//
+// Bei Rg. 26-07: 7 berechnete Tage - 1,75 Ueberziehung aus 26-05 = 5,25 echtes
+// Kontingent. (In der Rechnung standen 2,00 Nachberechnung - dort auf einen
+// glatten Wert gerundet. Massgeblich ist hier die tatsaechlich gearbeitete
+// Zeit, damit "uebrig" immer dem echten Saldo entspricht.)
+//
+// Ausgerechnet wird das ueber den Saldo, was auf dasselbe hinauslaeuft und
+// ohne Perioden-Summen auskommt:
+//
+//   Nenner  = Saldo + Verbrauch seit der letzten Rechnung
+//   Zaehler = Verbrauch seit der letzten Rechnung
+//
+// Denn Saldo = alles gekauft - alles verbraucht, also ist
+// Saldo + Verbrauch_seit = alles gekauft - Verbrauch_davor = Kontingent.
 function computeBalanceInfo(data) {
-  const total = (data.purchases || [])
-    .filter((p) => p.status === 'bezahlt')
-    .reduce((sum, p) => sum + p.quantity, 0);
   const balance = Number(data.balance);
-  const consumed = total - balance;
+  const paid = (data.purchases || []).filter((p) => p.status === 'bezahlt');
+  // purchases kommen absteigend aus get_dashboard, das Maximum ist trotzdem
+  // billiger zu bilden als sich auf die Sortierung zu verlassen.
+  const lastPaid = paid.reduce(
+    (latest, p) => (!latest || p.purchased_at > latest.purchased_at ? p : latest),
+    null,
+  );
+
+  let total;
+  let consumed;
+  if (lastPaid) {
+    const since = lastPaid.purchased_at.slice(0, 10);
+    consumed = (data.visits || [])
+      .filter((v) => v.visit_date > since)
+      .reduce((sum, v) => sum + (WEIGHTS[v.shift_type] ?? WEIGHTS.full), 0);
+    total = balance + consumed;
+  } else {
+    // Kunde ohne bezahlte Rechnung: nichts gekauft, nichts anzuzeigen.
+    total = 0;
+    consumed = 0;
+  }
+
   const pct = total > 0 ? consumed / total : 0;
   let ringColor = COLORS.accentDark;
   if (pct >= 1) ringColor = COLORS.red;
