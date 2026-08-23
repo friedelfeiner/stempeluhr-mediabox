@@ -191,6 +191,7 @@ const state = {
   legendOpen: false,
   modalOpen: false,
   selectedPack: null,
+  floskel: 0,
   data: null,
 };
 
@@ -661,14 +662,68 @@ function renderPayments(data) {
 // Render: Modal "Neue Rechnung anfordern"
 // ---------------------------------------------------------------------------
 
+// Vier Grussformeln, die beim Oeffnen des Modals durchrotieren (siehe
+// naechsteFloskel). WhatsApp und E-Mail nehmen immer dieselbe, damit der Kunde
+// nicht zwei verschiedene Tonlagen vor sich hat.
+const ZAHLWORTE = ['null', 'eine', 'zwei', 'drei', 'vier', 'fuenf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwoelf', 'dreizehn', 'vierzehn', 'fuenfzehn', 'sechzehn', 'siebzehn', 'achtzehn', 'neunzehn', 'zwanzig'];
+
+function zahlwort(n) {
+  return ZAHLWORTE[n] || String(n);
+}
+
+const FLOSKELN = [
+  {
+    // A - Barocker Kanzleistil
+    betreff: (n) => `Untertänigstes Rechnungsbegehren über ${n} Tage`,
+    text: (n, eur) => `Werter Schnittgroßmeister Flo,\n\nin tiefster Demut nahe ich mich Eurem Schneidetische und bitte gnädigst um Ausstellung einer Rechnung über ${n} Tage Eurer unfassbar günstigen Schnittage (${eur} €).\n\nIn immerwährender Hochachtung,\nEuer ergebenster Auftraggeber`,
+  },
+  {
+    // B - Herold / Urkunde
+    betreff: (n) => `Kund und zu wissen sei: ${n} Tage Schnittkunst begehrt`,
+    text: (n, eur) => `Vernehmet, Meister der Schnitte!\n\nKund und zu wissen sei hiermit, dass begehrt werden ${n} Tage Eurer segensreichen Schnittkunst, zum Preise von ${eur} €. Möge die Rechnung alsbald ihren Weg zu mir finden.\n\nGegeben zu Wien, am heutigen Tage.`,
+  },
+  {
+    // C - Sakral, leicht entrueckt
+    betreff: (n) => `Anrufung des Timeline-Hüters — ${n} Tage`,
+    text: (n, eur) => `Erhabener Hüter der Timeline,\n\nmein Projekt liegt im Dunkeln und harret Eures Schnittes. Ich erflehe ${n} Tage Eurer Gnade (${eur} €) und bitte untertänigst um das heilige Dokument der Rechnung.\n\nIn ewiger Dankbarkeit`,
+  },
+  {
+    // D - Uebertrieben notariell
+    betreff: (n) => `Antrag auf Ausfertigung einer Rechnung über ${n} Tage`,
+    text: (n, eur) => `Sehr verehrter Herr Schnittgroßmeister,\n\nhiermit beantrage ich, vorbehaltlich Ihrer allergnädigsten Zustimmung, die Ausfertigung einer Rechnung über ${n} (in Worten: ${zahlwort(n)}) Tage Ihrer schlechterdings konkurrenzlos bepreisten Schnittage, mithin ${eur} €.\n\nFür die Gewährung verbleibe ich in vorauseilender Hochachtung,\nIhr sehr ergebener Kunde`,
+  },
+];
+
+// Merkt sich die zuletzt benutzte Formel im localStorage, damit nicht bei jedem
+// Oeffnen dieselbe kommt und auch ein App-Neustart die Reihe fortsetzt.
+// localStorage kann im privaten Modus werfen - dann faengt die Reihe halt neu an.
+const FLOSKEL_KEY = 'stempeluhr.floskel';
+
+function naechsteFloskel() {
+  let last = -1;
+  try {
+    const raw = localStorage.getItem(FLOSKEL_KEY);
+    if (raw !== null) last = Number(raw);
+  } catch (_) { /* egal */ }
+  if (!Number.isInteger(last) || last < 0) last = -1;
+  const next = (last + 1) % FLOSKELN.length;
+  try { localStorage.setItem(FLOSKEL_KEY, String(next)); } catch (_) { /* egal */ }
+  return next;
+}
+
+function floskel() {
+  return FLOSKELN[state.floskel] || FLOSKELN[0];
+}
+
 function waLink(n) {
-  const text = `Hallo Flo, ich möchte gern ${n} Tage (${n * PRICES_EUR.full} €) nachbestellen.`;
+  const text = floskel().text(n, n * PRICES_EUR.full);
   return `https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent(text)}`;
 }
 
 function mailLink(n) {
-  const subject = `Neue Rechnung – ${n} Tage`;
-  const body = `Hallo Flo,\n\nbitte eine neue Rechnung über ${n} Tage (${n * PRICES_EUR.full} €).\n\nDanke!`;
+  const f = floskel();
+  const subject = f.betreff(n);
+  const body = f.text(n, n * PRICES_EUR.full);
   return `mailto:${CONTACT.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -764,7 +819,7 @@ root.addEventListener('click', (e) => {
   else if (action === 'month-prev') { state.monthOffset -= 1; render(); }
   else if (action === 'month-next') { state.monthOffset += 1; render(); }
   else if (action === 'toggle-legend') { state.legendOpen = !state.legendOpen; render(); }
-  else if (action === 'open-modal') { state.modalOpen = true; render(); }
+  else if (action === 'open-modal') { state.modalOpen = true; state.floskel = naechsteFloskel(); render(); }
   else if (action === 'close-modal') { state.modalOpen = false; state.selectedPack = null; render(); }
   else if (action === 'stop') { e.stopPropagation(); }
   else if (action === 'select-pack') { state.selectedPack = Number(el.dataset.pack); render(); }
