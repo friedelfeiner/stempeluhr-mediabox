@@ -1,4 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// Exakte Version: ein neues Release von supabase-js soll nicht unbemerkt
+// beide Dashboards gleichzeitig veraendern koennen.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.119.0';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -206,6 +208,18 @@ function renderNotFound() {
   root.innerHTML = `<div style="font-size:14px;color:rgba(238,242,234,.5)">Diese Seite existiert nicht.</div>`;
 }
 
+// Gueltiger Link, aber Server/Netz gerade weg: nicht "existiert nicht" sagen,
+// sonst glaubt der Kunde, sein Link sei kaputt.
+function renderUnavailable() {
+  root.className = 'not-found';
+  root.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+      <div style="font-size:14px;color:rgba(238,242,234,.6)">Gerade nicht erreichbar.</div>
+      <button id="retry" type="button" style="font:inherit;font-size:13px;font-weight:600;color:#eef2ea;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:8px 18px;cursor:pointer">Nochmal versuchen</button>
+    </div>`;
+  document.getElementById('retry').addEventListener('click', () => main());
+}
+
 function renderLoading() {
   root.className = '';
   root.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-size:13px;color:rgba(238,242,234,.4)">Lädt …</div>`;
@@ -242,22 +256,30 @@ function renderLoading() {
 //
 // Denn Saldo = alles gekauft - alles verbraucht, also ist
 // Saldo + Verbrauch_seit = alles gekauft - Verbrauch_davor = Kontingent.
+// Juengste bezahlte Rechnung. Bewusst das Maximum statt .find(): so haengt
+// nichts davon ab, wie get_dashboard die Kaeufe sortiert.
+function latestPaidPurchase(data) {
+  return (data.purchases || [])
+    .filter((p) => p.status === 'bezahlt')
+    .reduce(
+      (latest, p) => (!latest || p.purchased_at > latest.purchased_at ? p : latest),
+      null,
+    );
+}
+
 function computeBalanceInfo(data) {
   const balance = Number(data.balance);
-  const paid = (data.purchases || []).filter((p) => p.status === 'bezahlt');
-  // purchases kommen absteigend aus get_dashboard, das Maximum ist trotzdem
-  // billiger zu bilden als sich auf die Sortierung zu verlassen.
-  const lastPaid = paid.reduce(
-    (latest, p) => (!latest || p.purchased_at > latest.purchased_at ? p : latest),
-    null,
-  );
+  const lastPaid = latestPaidPurchase(data);
 
   let total;
   let consumed;
   if (lastPaid) {
     const since = lastPaid.purchased_at.slice(0, 10);
     consumed = (data.visits || [])
-      .filter((v) => v.visit_date > since)
+      // >=: der Tag der Rechnung gehoert schon zur neuen Rechnung - so steht
+      // es in 26-08 ("Kontingent ab 23. September") und so rechnet auch das
+      // Carry-Over-Konto im Sync (Flo, 2026-11-16).
+      .filter((v) => v.visit_date >= since)
       .reduce((sum, v) => sum + (WEIGHTS[v.shift_type] ?? WEIGHTS.full), 0);
     total = balance + consumed;
   } else {
@@ -266,7 +288,11 @@ function computeBalanceInfo(data) {
     consumed = 0;
   }
 
-  const pct = total > 0 ? consumed / total : 0;
+  // Ueberzogen ist immer rot - auch wenn die neue Rechnung die alte
+  // Ueberziehung nicht ganz deckt und das Kontingent dadurch <= 0 ist.
+  // Sonst stuende dort "0 %" in Gruen neben "… Tage ueberzogen".
+  let pct = total > 0 ? consumed / total : 0;
+  if (balance < 0) pct = Math.max(pct, 1);
   let ringColor = COLORS.accentDark;
   if (pct >= 1) ringColor = COLORS.red;
   else if (pct >= 0.8) ringColor = COLORS.orange;
@@ -277,8 +303,12 @@ function calendarWindow(monthOffset) {
   const today = new Date();
   const refMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
   const start = mondayOnOrBefore(refMonth);
+  // Meist reichen 5 Wochen; Monate wie August 2026 (beginnt Samstag, 31 Tage)
+  // brauchen eine sechste, sonst fehlt der Monatsletzte.
+  const lastOfMonth = new Date(refMonth.getFullYear(), refMonth.getMonth() + 1, 0);
+  const weeks = Math.ceil((Math.round((lastOfMonth - start) / 86_400_000) + 1) / 7);
   const rows = [];
-  for (let w = 0; w < 5; w++) {
+  for (let w = 0; w < weeks; w++) {
     const cells = [];
     for (let c = 0; c < 7; c++) {
       const d = new Date(start);
@@ -288,7 +318,7 @@ function calendarWindow(monthOffset) {
     rows.push({ kw: isoWeekNumber(cells[0]), cells });
   }
   const rangeStart = rows[0].cells[0];
-  const rangeEnd = rows[4].cells[6];
+  const rangeEnd = rows[rows.length - 1].cells[6];
   return { refMonth, rows, rangeStart, rangeEnd, today };
 }
 
@@ -337,7 +367,7 @@ function renderHeader(data) {
 
 function renderRing(data, info) {
   const circumference = 2 * Math.PI * 50;
-  const dash = circumference * info.pct;
+  const dash = circumference * Math.min(info.pct, 1);
   const dayWord = pluralize(info.balance, 'ganzer Tag', 'ganze Tage');
   const remainingLabel = info.balance >= 0
     ? `${fmtNumber(info.balance)} ${dayWord} übrig`
@@ -597,13 +627,13 @@ function renderVerlauf(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Render: Seit letzter Zahlung
+// Render: Seit letzter Rechnung (gezaehlt ab Rechnungsdatum, nicht Zahlungsdatum)
 // ---------------------------------------------------------------------------
 
 function renderSummary(data) {
-  const lastPaid = data.purchases.find((p) => p.status === 'bezahlt');
+  const lastPaid = latestPaidPurchase(data);
   const since = lastPaid ? parseDateOnly(lastPaid.purchased_at.slice(0, 10)) : null;
-  const relevant = data.visits.filter((v) => !since || parseDateOnly(v.visit_date) > since);
+  const relevant = data.visits.filter((v) => !since || parseDateOnly(v.visit_date) >= since);
 
   const counts = { full: 0, sprint: 0, halb: 0 };
   for (const v of relevant) counts[v.shift_type] = (counts[v.shift_type] || 0) + 1;
@@ -625,7 +655,7 @@ function renderSummary(data) {
   const total = Object.entries(counts).reduce((sum, [key, n]) => sum + n * PRICES_EUR[key], 0);
 
   return `
-    <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(238,242,234,.35);margin:0 0 6px">Seit letzter Zahlung</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(238,242,234,.35);margin:0 0 6px">Seit letzter Rechnung</div>
     ${rows}
     <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:13px;font-weight:700">
       <span>Summe</span><span>${fmtEuro(total)}</span>
@@ -833,10 +863,13 @@ let client = null;
 let accessToken = null;
 let lastLoadedAt = 0;
 
+class NoAccessError extends Error {}
+
 async function loadDashboard() {
   const { data, error } = await client.rpc('get_dashboard', { token: accessToken });
   if (error) throw error;
-  if (!data) throw new Error('kein Zugriff');
+  // get_dashboard liefert bei unbekanntem Token bewusst nur null.
+  if (!data) throw new NoAccessError('kein Zugriff');
   state.data = data;
   lastLoadedAt = Date.now();
 }
@@ -963,22 +996,28 @@ function initPullToRefresh() {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
+let pullToRefreshReady = false;
+
 async function main() {
   accessToken = new URLSearchParams(window.location.search).get('t');
   if (!accessToken) { renderNotFound(); return; }
 
   renderLoading();
-  client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  client ??= createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
   try {
     await loadDashboard();
-  } catch {
-    renderNotFound();
+  } catch (err) {
+    if (err instanceof NoAccessError) renderNotFound();
+    else renderUnavailable();
     return;
   }
 
   render();
-  initPullToRefresh();
+  if (!pullToRefreshReady) {
+    initPullToRefresh();
+    pullToRefreshReady = true;
+  }
 }
 
 main();
